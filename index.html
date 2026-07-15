@@ -41,7 +41,7 @@
 <body>
 <canvas id="scene"></canvas>
 <div id="vignette"></div>
-<div id="greenOverlay"></div>
+<div id="greenOverlay" class="active" style="background:#ff7a1a;"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -158,6 +158,12 @@ function drawGlitchTitle(text, x, y, size){
 let cursorBlink = true;
 let lastBlink = 0;
 let glitchBurst = 0;
+
+// ---- INTRO: pantalla naranja completa al cargar -> SPACE -> pantalla rosa 10s -> se revela la computadora ----
+const INTRO_ORANGE = '#ff7a1a';
+const INTRO_ROSE = '#ff2f8f';
+let introPhase = 'orange'; // 'orange' | 'rose' | 'done'
+let introTimer = null;
 
 // ---- estado del efecto "space": 0 normal | 1 azul (interno, con mensaje) | 2..5 overlays de color ----
 const colorSequence = ['#17e06a', '#8b2fe0', '#e0362f', '#e6c72f']; // verde, morada, roja, amarilla
@@ -457,6 +463,39 @@ window.addEventListener('keydown', e=>{
   }
   if(e.code === 'Space'){
     e.preventDefault();
+
+    // ---- FASE DE INTRO: naranja -> rosa (10s) -> revela la computadora ----
+    if(introPhase === 'orange'){
+      introPhase = 'rose';
+      greenOverlay.classList.remove('glitching');
+      void greenOverlay.offsetWidth;
+      greenOverlay.classList.add('glitching');
+      clearTimeout(overlaySwapTimer);
+      overlaySwapTimer = setTimeout(()=>{
+        greenOverlay.style.background = INTRO_ROSE;
+      }, 90);
+
+      clearTimeout(introTimer);
+      introTimer = setTimeout(()=>{
+        introPhase = 'done';
+        spaceState = 0;
+        bsodMode = false;
+        // glitch justo antes de revelar, para que no sea un fundido plano
+        greenOverlay.classList.remove('glitching');
+        void greenOverlay.offsetWidth;
+        greenOverlay.classList.add('glitching');
+        setTimeout(()=>{
+          greenOverlay.classList.remove('active'); // se desvanece y revela la computadora
+        }, 90);
+      }, 1500);
+      return;
+    }
+    if(introPhase === 'rose'){
+      // esperando los 10s de la pantalla rosa: ignora space por ahora
+      return;
+    }
+
+    // ---- CICLO NORMAL (una vez terminada la intro) ----
     spaceState = (spaceState + 1) % (colorSequence.length + 2); // 0..5
     bsodMode = (spaceState !== 0);
     clearTimeout(overlaySwapTimer);

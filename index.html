@@ -16,6 +16,11 @@
   }
   #greenOverlay.active { opacity:1; }
   #greenOverlay.glitching { animation: overlayGlitch 0.16s linear 2; }
+  #overlayImage, #overlayVideo {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; display:none;
+  }
+  #overlayImage.show, #overlayVideo.show { display:block; }
   @keyframes overlayGlitch {
     0%   { filter:none; transform:translate(0,0); clip-path: inset(0 0 0 0); }
     15%  { filter:hue-rotate(45deg) saturate(2.2) brightness(1.3); transform:translate(-10px,0); clip-path: inset(10% 0 60% 0); }
@@ -41,8 +46,12 @@
 <body>
 <canvas id="scene"></canvas>
 <div id="vignette"></div>
-<div id="greenOverlay" class="active" style="background:#ff7a1a;"></div>
+<div id="greenOverlay" class="active" style="background:#ff7a1a;">
+  <video id="overlayVideo" muted playsinline loop></video>
+  <img id="overlayImage" alt="">
+</div>
 
+<script src="assets.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
@@ -52,6 +61,31 @@
 // ---------------------------------------------------------------
 const canvas = document.getElementById('scene');
 const greenOverlay = document.getElementById('greenOverlay');
+const overlayImage = document.getElementById('overlayImage');
+const overlayVideo = document.getElementById('overlayVideo');
+
+// muestra la imagen o el video correspondiente a la clave dada (ver assets.js)
+function setOverlayMedia(key){
+  const asset = (typeof SCREEN_ASSETS !== 'undefined') ? SCREEN_ASSETS[key] : null;
+  overlayImage.classList.remove('show');
+  overlayVideo.classList.remove('show');
+  overlayVideo.pause();
+  if(!asset) return;
+  if(asset.type === 'video'){
+    if(overlayVideo.getAttribute('src') !== asset.src) overlayVideo.src = asset.src;
+    overlayVideo.currentTime = 0;
+    overlayVideo.play().catch(()=>{});
+    overlayVideo.classList.add('show');
+  } else {
+    overlayImage.src = asset.src;
+    overlayImage.classList.add('show');
+  }
+}
+function clearOverlayMedia(){
+  overlayImage.classList.remove('show');
+  overlayVideo.classList.remove('show');
+  overlayVideo.pause();
+}
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -172,6 +206,9 @@ let bsodMode = false;   // true en cualquier estado activo (1..5): zoom + glitch
 let glitchIntensity = 1;   // multiplicador de intensidad de glitch (suaviza hacia el objetivo)
 let blueAlpha = 0;         // opacidad de la pantalla azul interna (solo estado 1)
 let overlaySwapTimer = null;
+const colorKeys = ['green', 'purple', 'red', 'blue', 'yellow']; // en el mismo orden que colorSequence
+
+setOverlayMedia('orange'); // pantalla naranja visible desde el primer instante
 
 function drawScreen(t){
   // fondo degradado verde
@@ -473,6 +510,7 @@ window.addEventListener('keydown', e=>{
       clearTimeout(overlaySwapTimer);
       overlaySwapTimer = setTimeout(()=>{
         greenOverlay.style.background = INTRO_ROSE;
+        setOverlayMedia('rose');
       }, 90);
 
       clearTimeout(introTimer);
@@ -486,6 +524,7 @@ window.addEventListener('keydown', e=>{
         greenOverlay.classList.add('glitching');
         setTimeout(()=>{
           greenOverlay.classList.remove('active'); // se desvanece y revela la computadora
+          clearOverlayMedia();
         }, 90);
       }, 1500);
       return;
@@ -503,6 +542,7 @@ window.addEventListener('keydown', e=>{
     if(spaceState === 0 || spaceState === 1){
       // volviendo a normal o entrando al estado azul: se revela la computadora
       greenOverlay.classList.remove('active');
+      clearOverlayMedia();
     } else {
       const alreadyOpaque = greenOverlay.classList.contains('active');
       if(alreadyOpaque){
@@ -512,13 +552,16 @@ window.addEventListener('keydown', e=>{
         greenOverlay.classList.add('glitching');
         // el color nuevo aparece a mitad del glitch, no antes
         const nextColor = colorSequence[spaceState-2];
+        const nextKey = colorKeys[spaceState-2];
         overlaySwapTimer = setTimeout(()=>{
           greenOverlay.style.background = nextColor;
+          setOverlayMedia(nextKey);
         }, 90);
       } else {
         // primera vez que entra a las pantallas de color: breve glitch de revelación
         overlaySwapTimer = setTimeout(()=>{
           greenOverlay.style.background = colorSequence[spaceState-2];
+          setOverlayMedia(colorKeys[spaceState-2]);
           greenOverlay.classList.add('active');
         }, 260);
       }

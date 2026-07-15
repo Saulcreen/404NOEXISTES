@@ -9,6 +9,12 @@
   html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#0a0a0e; }
   canvas#scene { display:block; width:100%; height:100%; }
   body.is-fullscreen, body.is-fullscreen canvas#scene { cursor:none; }
+  #greenOverlay {
+    position:fixed; inset:0; background:#17e06a; opacity:0;
+    transition: opacity 1.1s ease;
+    pointer-events:none; z-index:50;
+  }
+  #greenOverlay.active { opacity:1; }
   #hint {
     position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
     color:#8fe6b8; font-family:'VT323', monospace; font-size:18px;
@@ -25,6 +31,7 @@
 <body>
 <canvas id="scene"></canvas>
 <div id="vignette"></div>
+<div id="greenOverlay"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -34,6 +41,7 @@
 // SETUP
 // ---------------------------------------------------------------
 const canvas = document.getElementById('scene');
+const greenOverlay = document.getElementById('greenOverlay');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -84,6 +92,8 @@ screenGlow.castShadow = true;
 screenGlow.shadow.mapSize.set(1024,1024);
 screenGlow.shadow.bias = -0.002;
 scene.add(screenGlow);
+const glowColorGreen = new THREE.Color(0x4bffa0);
+const glowColorBlue = new THREE.Color(0x2050ff);
 
 // suelo
 const floorMat = new THREE.MeshStandardMaterial({ color:0x050506, roughness:0.95, metalness:0.05 });
@@ -138,6 +148,12 @@ function drawGlitchTitle(text, x, y, size){
 let cursorBlink = true;
 let lastBlink = 0;
 let glitchBurst = 0;
+
+// ---- estado del efecto "space": 0 normal | 1 pantalla azul (zoom+glitch) | 2 pantalla verde total ----
+let spaceState = 0;
+let bsodMode = false;   // true solo en el estado 1 (azul)
+let glitchIntensity = 1;   // multiplicador de intensidad de glitch (suaviza hacia el objetivo)
+let blueAlpha = 0;         // opacidad de la pantalla azul (suaviza hacia el objetivo)
 
 function drawScreen(t){
   // fondo degradado verde
@@ -218,15 +234,25 @@ function drawScreen(t){
   sctx.fillStyle = '#123522';
   sctx.fillText('ECHO 2.0 — SÉ TU MEJOR VERSIÓN', TW/2, TH-40);
 
-  // ---- GLITCH: slices horizontales aleatorias ----
-  if(Math.random() < 0.05) glitchBurst = 6;
+  // ---- GLITCH: slices horizontales aleatorias (mas fuerte en modo bsod) ----
+  if(Math.random() < 0.05*glitchIntensity) glitchBurst = Math.round(6*glitchIntensity);
   if(glitchBurst > 0){
     glitchBurst--;
-    for(let i=0;i<4;i++){
+    const slices = Math.round(4*glitchIntensity);
+    for(let i=0;i<slices;i++){
       const sy = Math.random()*TH;
-      const sh = 4 + Math.random()*22;
-      const dx = (Math.random()*60-30);
+      const sh = 4 + Math.random()*22*glitchIntensity;
+      const dx = (Math.random()*60-30)*glitchIntensity;
       sctx.drawImage(scr, 0, sy, TW, sh, dx, sy, TW, sh);
+    }
+    // desplazamiento de canal de color extra durante el glitch fuerte
+    if(glitchIntensity > 1.4){
+      sctx.globalAlpha = 0.18;
+      sctx.fillStyle = '#ff2fd8';
+      sctx.fillRect(-6*glitchIntensity,0,TW,TH);
+      sctx.fillStyle = '#2fe8ff';
+      sctx.fillRect(6*glitchIntensity,0,TW,TH);
+      sctx.globalAlpha = 1;
     }
   }
 
@@ -237,6 +263,32 @@ function drawScreen(t){
     sctx.fillRect(0,y,TW,1);
   }
   sctx.globalAlpha = 1;
+
+  // ---- PANTALLA AZUL (fundido suave encima de todo) ----
+  if(blueAlpha > 0.003){
+    sctx.save();
+    sctx.globalAlpha = blueAlpha;
+    const bgrd = sctx.createLinearGradient(0,0,0,TH);
+    bgrd.addColorStop(0,'#1642c8');
+    bgrd.addColorStop(1,'#0a2a9e');
+    sctx.fillStyle = bgrd;
+    sctx.fillRect(0,0,TW,TH);
+    if(blueAlpha > 0.35){
+      const textAlpha = Math.min(1, (blueAlpha-0.35)/0.5);
+      sctx.globalAlpha = textAlpha;
+      sctx.fillStyle = '#ffffff';
+      sctx.textAlign = 'left';
+      sctx.font = "90px 'VT323', monospace";
+      sctx.fillText(':(', 70, 190);
+      sctx.font = "26px 'VT323', monospace";
+      sctx.fillText('Se ha producido un error y MINDSYNC debe reiniciarse.', 70, 260);
+      sctx.fillText('Simplemente reiniciaremos por ti.', 70, 292);
+      sctx.font = "20px 'VT323', monospace";
+      sctx.fillText('Si quieres saber más, puedes buscar el error en:', 70, 360);
+      sctx.fillText('MINDSYNC://ERROR_404_VALERIA_ORTEGA', 70, 388);
+    }
+    sctx.restore();
+  }
 
   screenTexture.needsUpdate = true;
 }
@@ -391,6 +443,12 @@ window.addEventListener('keydown', e=>{
       document.exitFullscreen();
     }
   }
+  if(e.code === 'Space'){
+    e.preventDefault();
+    spaceState = (spaceState + 1) % 3;
+    bsodMode = (spaceState === 1);
+    greenOverlay.classList.toggle('active', spaceState === 2);
+  }
 });
 document.addEventListener('fullscreenchange', ()=>{
   document.body.classList.toggle('is-fullscreen', !!document.fullscreenElement);
@@ -401,9 +459,21 @@ document.addEventListener('fullscreenchange', ()=>{
 // ---------------------------------------------------------------
 function animate(t){
   requestAnimationFrame(animate);
+
+  // objetivos segun el modo bsod (activado con SPACE)
+  const targetRadius = bsodMode ? 1.85 : 4.3;
+  const targetGlitch  = bsodMode ? 2.6  : 1.0;
+  const targetBlue    = bsodMode ? 1.0  : 0.0;
+
+  radius          += (targetRadius - radius) * 0.045;
+  glitchIntensity  += (targetGlitch - glitchIntensity) * 0.06;
+  blueAlpha        += (targetBlue - blueAlpha) * 0.025;
+
   drawScreen(t);
-  screenGlow.intensity = 2.0 + Math.sin(t/250)*0.3;
-  glowMat.opacity = 0.28 + Math.sin(t/250)*0.08;
+  screenGlow.intensity = (2.0 + Math.sin(t/250)*0.3) * (1 + blueAlpha*0.6);
+  screenGlow.color.copy(glowColorGreen).lerp(glowColorBlue, blueAlpha);
+  glowMat.color.copy(glowColorGreen).lerp(glowColorBlue, blueAlpha);
+  glowMat.opacity = (0.28 + Math.sin(t/250)*0.08) * (1 - blueAlpha*0.3);
   // leve deriva automatica si no se arrastra
   if(!dragging){ theta += Math.sin(t/6000)*0.00015; }
   updateCamera();

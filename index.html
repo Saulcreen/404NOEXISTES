@@ -15,6 +15,16 @@
     pointer-events:none; z-index:50;
   }
   #greenOverlay.active { opacity:1; }
+  #greenOverlay.glitching { animation: overlayGlitch 0.16s linear 2; }
+  @keyframes overlayGlitch {
+    0%   { filter:none; transform:translate(0,0); clip-path: inset(0 0 0 0); }
+    15%  { filter:hue-rotate(45deg) saturate(2.2) brightness(1.3); transform:translate(-10px,0); clip-path: inset(10% 0 60% 0); }
+    30%  { filter:hue-rotate(-35deg) saturate(2) brightness(0.8); transform:translate(8px,0); clip-path: inset(55% 0 15% 0); }
+    45%  { filter:hue-rotate(25deg) contrast(1.6); transform:translate(-6px,2px); clip-path: inset(30% 0 40% 0); }
+    60%  { filter:hue-rotate(-20deg) contrast(1.4); transform:translate(6px,-2px); clip-path: inset(5% 0 75% 0); }
+    75%  { filter:hue-rotate(15deg); transform:translate(-3px,0); clip-path: inset(70% 0 5% 0); }
+    100% { filter:none; transform:translate(0,0); clip-path: inset(0 0 0 0); }
+  }
   #hint {
     position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
     color:#8fe6b8; font-family:'VT323', monospace; font-size:18px;
@@ -449,16 +459,30 @@ window.addEventListener('keydown', e=>{
     e.preventDefault();
     spaceState = (spaceState + 1) % (colorSequence.length + 2); // 0..5
     bsodMode = (spaceState !== 0);
-
-    // apaga el overlay actual para que se vea el glitch de la pantalla 3D un instante
-    greenOverlay.classList.remove('active');
     clearTimeout(overlaySwapTimer);
 
-    if(spaceState >= 2){
-      overlaySwapTimer = setTimeout(()=>{
-        greenOverlay.style.background = colorSequence[spaceState-2];
-        greenOverlay.classList.add('active');
-      }, 260);
+    if(spaceState === 0 || spaceState === 1){
+      // volviendo a normal o entrando al estado azul: se revela la computadora
+      greenOverlay.classList.remove('active');
+    } else {
+      const alreadyOpaque = greenOverlay.classList.contains('active');
+      if(alreadyOpaque){
+        // glitch arranca YA, en el instante de presionar space, sobre el color actual
+        greenOverlay.classList.remove('glitching');
+        void greenOverlay.offsetWidth; // fuerza reinicio de la animación
+        greenOverlay.classList.add('glitching');
+        // el color nuevo aparece a mitad del glitch, no antes
+        const nextColor = colorSequence[spaceState-2];
+        overlaySwapTimer = setTimeout(()=>{
+          greenOverlay.style.background = nextColor;
+        }, 90);
+      } else {
+        // primera vez que entra a las pantallas de color: breve glitch de revelación
+        overlaySwapTimer = setTimeout(()=>{
+          greenOverlay.style.background = colorSequence[spaceState-2];
+          greenOverlay.classList.add('active');
+        }, 260);
+      }
     }
   }
 });

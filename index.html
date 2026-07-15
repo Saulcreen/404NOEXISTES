@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MINDSYNC // 404: NO EXISTES</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#0a0a0e; }
+  canvas#scene { display:block; width:100%; height:100%; }
+  #hint {
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    color:#8fe6b8; font-family:'VT323', monospace; font-size:18px;
+    letter-spacing:2px; opacity:0.7; pointer-events:none;
+    text-shadow:0 0 8px rgba(80,255,160,0.6);
+    user-select:none;
+  }
+  #vignette {
+    position:fixed; inset:0; pointer-events:none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+
+// ---------------------------------------------------------------
+// SETUP
+// ---------------------------------------------------------------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0e);
+scene.fog = new THREE.Fog(0x0a0a0e, 8, 22);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 100);
+
+// target point = centro de la pantalla, vista de frente
+const TARGET = new THREE.Vector3(0, 1.72, 0.9);
+let radius = 4.3, theta = 0, phi = Math.PI/2 - 0.02; // theta: horizontal, phi: vertical
+
+function updateCamera(){
+  camera.position.x = TARGET.x + radius * Math.sin(phi) * Math.sin(theta);
+  camera.position.y = TARGET.y + radius * Math.cos(phi);
+  camera.position.z = TARGET.z + radius * Math.sin(phi) * Math.cos(theta);
+  camera.lookAt(TARGET);
+}
+updateCamera();
+
+// ---------------------------------------------------------------
+// LUCES
+// ---------------------------------------------------------------
+scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x0a0a0a, 0.55));
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.55);
+keyLight.position.set(3, 6, 4);
+scene.add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x4fd8ff, 0.35);
+rimLight.position.set(-4, 3, -3);
+scene.add(rimLight);
+const screenGlow = new THREE.PointLight(0x4bffa0, 2.2, 6, 2);
+screenGlow.position.set(0, 1.72, 1.6);
+scene.add(screenGlow);
+
+// suelo
+const floorMat = new THREE.MeshStandardMaterial({ color:0x111318, roughness:0.9, metalness:0.1 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40,40), floorMat);
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
+
+// ---------------------------------------------------------------
+// TEXTURA DE PANTALLA (canvas 2D) -- estilo CRT glitch
+// ---------------------------------------------------------------
+const TW = 1024, TH = 552;
+const scr = document.createElement('canvas');
+scr.width = TW; scr.height = TH;
+const sctx = scr.getContext('2d');
+const screenTexture = new THREE.CanvasTexture(scr);
+screenTexture.encoding = THREE.sRGBEncoding;
+screenTexture.minFilter = THREE.LinearFilter;
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawStripeBar(x,y,w,h){
+  const colors = ['#ff5fd8','#39e0ff'];
+  const n = 26;
+  const sw = w/n;
+  for(let i=0;i<n;i++){
+    sctx.fillStyle = colors[i%2];
+    sctx.fillRect(x+i*sw, y, sw+1, h);
+  }
+}
+
+function drawGlitchTitle(text, x, y, size){
+  sctx.font = `${size}px 'Press Start 2P', monospace`;
+  sctx.textAlign = 'center';
+  const jitter = (Math.random()<0.12) ? (Math.random()*10-5) : 0;
+  sctx.fillStyle = '#39e0ff';
+  sctx.fillText(text, x-4+jitter, y);
+  sctx.fillStyle = '#ff5fd8';
+  sctx.fillText(text, x+4+jitter, y);
+  sctx.fillStyle = '#111111';
+  sctx.fillText(text, x, y);
+}
+
+let cursorBlink = true;
+let lastBlink = 0;
+let glitchBurst = 0;
+
+function drawScreen(t){
+  // fondo degradado verde
+  const grd = sctx.createLinearGradient(0,0,0,TH);
+  grd.addColorStop(0,'#4be09a');
+  grd.addColorStop(1,'#2fb877');
+  sctx.fillStyle = grd;
+  sctx.fillRect(0,0,TW,TH);
+
+  // ruido sutil
+  sctx.globalAlpha = 0.04;
+  for(let i=0;i<40;i++){
+    sctx.fillStyle = Math.random()<0.5 ? '#000000' : '#ffffff';
+    sctx.fillRect(Math.random()*TW, Math.random()*TH, Math.random()*3, Math.random()*3);
+  }
+  sctx.globalAlpha = 1;
+
+  // barras de color arriba y abajo
+  const barH = 22;
+  drawStripeBar(0,0,TW,barH);
+  drawStripeBar(0,TH-barH,TW,barH);
+
+  // caja terminal
+  const termX=40, termY=55, termW=TW-80, termH=140;
+  sctx.fillStyle = 'rgba(8,30,20,0.88)';
+  roundRect(sctx, termX, termY, termW, termH, 6);
+  sctx.fill();
+  sctx.strokeStyle = '#0d3a26';
+  sctx.lineWidth = 4;
+  sctx.stroke();
+
+  sctx.textAlign = 'left';
+  sctx.font = "26px 'VT323', monospace";
+  sctx.fillStyle = '#b6f7d4';
+  const lines = [
+    '> INICIANDO SISTEMA MINDSYNC...',
+    '> BUSCANDO USUARIO: VALERIA_ORTEGA',
+    '> REGISTRO NO ENCONTRADO',
+    '> ERROR 404'
+  ];
+  lines.forEach((line,i)=>{
+    sctx.fillText(line, termX+18, termY+34+i*28);
+  });
+  if(t - lastBlink > 500){ cursorBlink = !cursorBlink; lastBlink = t; }
+  if(cursorBlink){
+    const w = sctx.measureText(lines[3]).width;
+    sctx.fillRect(termX+18+w+8, termY+34+3*28-20, 14, 22);
+  }
+
+  // titulo grande glitch
+  drawGlitchTitle('404: NO', TW/2, 300, 62);
+  drawGlitchTitle('EXISTES', TW/2, 372, 62);
+
+  // subtitulo
+  sctx.textAlign='center';
+  sctx.font = "24px 'VT323', monospace";
+  sctx.fillStyle = '#0d2a1c';
+  sctx.fillText('SISTEMA DISTRIBUIDO // CAPÍTULO 6', TW/2, 415);
+
+  // boton press start
+  const pulse = 1 + Math.sin(t/300)*0.015;
+  sctx.save();
+  sctx.translate(TW/2, 462);
+  sctx.scale(pulse,pulse);
+  roundRect(sctx, -140, -28, 280, 56, 6);
+  sctx.fillStyle = '#f4ecd8';
+  sctx.fill();
+  sctx.lineWidth = 5;
+  sctx.strokeStyle = '#161616';
+  sctx.stroke();
+  sctx.fillStyle = '#161616';
+  sctx.font = "bold 26px 'Press Start 2P', monospace";
+  sctx.fillText('PRESS START', 0, 9);
+  sctx.restore();
+
+  // footer
+  sctx.font = "20px 'VT323', monospace";
+  sctx.fillStyle = '#123522';
+  sctx.fillText('ECHO 2.0 — SÉ TU MEJOR VERSIÓN', TW/2, TH-40);
+
+  // ---- GLITCH: slices horizontales aleatorias ----
+  if(Math.random() < 0.05) glitchBurst = 6;
+  if(glitchBurst > 0){
+    glitchBurst--;
+    for(let i=0;i<4;i++){
+      const sy = Math.random()*TH;
+      const sh = 4 + Math.random()*22;
+      const dx = (Math.random()*60-30);
+      sctx.drawImage(scr, 0, sy, TW, sh, dx, sy, TW, sh);
+    }
+  }
+
+  // scanlines
+  sctx.globalAlpha = 0.12;
+  sctx.fillStyle = '#000000';
+  for(let y=0;y<TH;y+=3){
+    sctx.fillRect(0,y,TW,1);
+  }
+  sctx.globalAlpha = 1;
+
+  screenTexture.needsUpdate = true;
+}
+
+// ---------------------------------------------------------------
+// COMPUTADORA (construida con cubos)
+// ---------------------------------------------------------------
+const rig = new THREE.Group();
+scene.add(rig);
+
+const shellColor = 0xcfc7ac;
+const shellMat = new THREE.MeshStandardMaterial({ color:shellColor, roughness:0.55, metalness:0.15 });
+const darkPlasticMat = new THREE.MeshStandardMaterial({ color:0x1c1c20, roughness:0.6, metalness:0.2 });
+const metalMat = new THREE.MeshStandardMaterial({ color:0x2b2b30, roughness:0.4, metalness:0.7 });
+
+// base / soporte
+const base = new THREE.Mesh(new THREE.BoxGeometry(1.7,0.16,1.3), metalMat);
+base.position.set(0, 0.08, 0.2);
+rig.add(base);
+
+const neck = new THREE.Mesh(new THREE.BoxGeometry(0.45,0.5,0.45), metalMat);
+neck.position.set(0, 0.4, 0.2);
+rig.add(neck);
+
+// carcasa principal del monitor
+const shellW=3.3, shellH=2.35, shellD=1.7;
+const shellY = 1.72;
+const shell = new THREE.Mesh(new THREE.BoxGeometry(shellW,shellH,shellD), shellMat);
+shell.position.set(0, shellY, 0.9-shellD/2+shellD/2); // z centrado en 0.9 aprox front
+rig.add(shell);
+
+// recalcular: colocamos la carcasa centrada de modo que su cara frontal quede en z ~ 0.05 (mundo)
+shell.position.set(0, shellY, 0.05);
+const shellFrontZ = shell.position.z + shellD/2;
+
+// bisel de pantalla (recuadro oscuro)
+const bezelW=2.85, bezelH=1.65, bezelD=0.12;
+const bezel = new THREE.Mesh(new THREE.BoxGeometry(bezelW,bezelH,bezelD), darkPlasticMat);
+bezel.position.set(0, shellY+0.03, shellFrontZ + bezelD/2 - 0.02);
+rig.add(bezel);
+const bezelFrontZ = bezel.position.z + bezelD/2;
+
+// pantalla (plano con textura)
+const screenAspect = TH/TW;
+const screenW = 2.55;
+const screenH = screenW*screenAspect;
+const screenMat = new THREE.MeshStandardMaterial({
+  map: screenTexture,
+  emissive: 0xffffff,
+  emissiveMap: screenTexture,
+  emissiveIntensity: 0.85,
+  roughness:0.35,
+  metalness:0.05
+});
+const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(screenW,screenH), screenMat);
+screenMesh.position.set(0, shellY+0.03, bezelFrontZ+0.005);
+rig.add(screenMesh);
+TARGET.set(screenMesh.position.x, screenMesh.position.y, screenMesh.position.z);
+
+// halo de brillo detrás/alrededor de la pantalla
+const glowMat = new THREE.MeshBasicMaterial({ color:0x53ffa8, transparent:true, opacity:0.35, blending:THREE.AdditiveBlending, depthWrite:false });
+const glowPlane = new THREE.Mesh(new THREE.PlaneGeometry(screenW*1.25, screenH*1.3), glowMat);
+glowPlane.position.set(0, shellY+0.03, bezelFrontZ-0.01);
+rig.add(glowPlane);
+
+// botones bajo la pantalla
+const btnColors = [0xe0533f, 0xf4ecd8, 0xf4ecd8, 0xe0533f];
+for(let i=0;i<4;i++){
+  const btn = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.05), new THREE.MeshStandardMaterial({color:btnColors[i], roughness:0.5}));
+  btn.position.set(-0.5+i*0.34, shellY - bezelH/2 - 0.15, bezelFrontZ+0.02);
+  rig.add(btn);
+}
+
+// rejillas laterales (detalles de cubos pequeños)
+for(let s=-1; s<=1; s+=2){
+  for(let i=0;i<6;i++){
+    const vent = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.14,0.5), darkPlasticMat);
+    vent.position.set(s*(shellW/2-0.06), shellY+0.6-i*0.2, shell.position.z);
+    rig.add(vent);
+  }
+}
+
+// parte trasera abultada (tubo CRT) construida con cubos decrecientes
+let cursorZ = shell.position.z - shellD/2;
+const backSegments = [
+  {w:2.6, h:1.9, d:0.55},
+  {w:1.95,h:1.45,d:0.5},
+  {w:1.25,h:0.95,d:0.4},
+  {w:0.6, h:0.5, d:0.3},
+];
+backSegments.forEach(seg=>{
+  cursorZ -= seg.d/2;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(seg.w,seg.h,seg.d), shellMat);
+  box.position.set(0, shellY, cursorZ);
+  rig.add(box);
+  cursorZ -= seg.d/2;
+});
+
+// teclado (placa + teclas hechas de cubos)
+const kbBase = new THREE.Mesh(new THREE.BoxGeometry(2.5,0.12,0.95), new THREE.MeshStandardMaterial({color:0xcfc7ac, roughness:0.6}));
+kbBase.position.set(0, 0.06, 1.85);
+rig.add(kbBase);
+
+const keyMat = new THREE.MeshStandardMaterial({color:0xe9e2cf, roughness:0.5});
+const keyMatDark = new THREE.MeshStandardMaterial({color:0x2a2a2e, roughness:0.5});
+const rows=4, cols=14;
+for(let r=0;r<rows;r++){
+  for(let c=0;c<cols;c++){
+    const key = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.07,0.15), (Math.random()<0.08)?keyMatDark:keyMat);
+    key.position.set(-1.15+c*0.175, 0.14, 1.55+r*0.19);
+    rig.add(key);
+  }
+}
+
+// ---------------------------------------------------------------
+// INTERACCION: arrastrar para orbitar (vista de frente por defecto)
+// ---------------------------------------------------------------
+let dragging=false, lastX=0, lastY=0;
+canvas.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+window.addEventListener('pointerup', ()=> dragging=false);
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const dx = e.clientX-lastX, dy = e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  theta -= dx*0.004;
+  phi   -= dy*0.003;
+  theta = Math.max(-0.7, Math.min(0.7, theta));
+  phi = Math.max(1.15, Math.min(1.75, phi));
+});
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------------------------------------------------------------
+// LOOP
+// ---------------------------------------------------------------
+function animate(t){
+  requestAnimationFrame(animate);
+  drawScreen(t);
+  screenGlow.intensity = 2.0 + Math.sin(t/250)*0.3;
+  glowMat.opacity = 0.28 + Math.sin(t/250)*0.08;
+  // leve deriva automatica si no se arrastra
+  if(!dragging){ theta += Math.sin(t/6000)*0.00015; }
+  updateCamera();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+})();
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@
 <style>
   html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#0a0a0e; }
   canvas#scene { display:block; width:100%; height:100%; }
+  body.is-fullscreen, body.is-fullscreen canvas#scene { cursor:none; }
   #hint {
     position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
     color:#8fe6b8; font-family:'VT323', monospace; font-size:18px;
@@ -37,10 +38,12 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0e);
-scene.fog = new THREE.Fog(0x0a0a0e, 8, 22);
+scene.background = new THREE.Color(0x030304);
+scene.fog = new THREE.Fog(0x030304, 4, 14);
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 100);
 
@@ -59,21 +62,34 @@ updateCamera();
 // ---------------------------------------------------------------
 // LUCES
 // ---------------------------------------------------------------
-scene.add(new THREE.HemisphereLight(0x3a4a5a, 0x0a0a0a, 0.55));
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.55);
+scene.add(new THREE.HemisphereLight(0x1a2028, 0x000000, 0.18));
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.16);
 keyLight.position.set(3, 6, 4);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048,2048);
+keyLight.shadow.camera.left = -4;
+keyLight.shadow.camera.right = 4;
+keyLight.shadow.camera.top = 5;
+keyLight.shadow.camera.bottom = -2;
+keyLight.shadow.camera.near = 1;
+keyLight.shadow.camera.far = 12;
+keyLight.shadow.bias = -0.0015;
 scene.add(keyLight);
-const rimLight = new THREE.DirectionalLight(0x4fd8ff, 0.35);
+const rimLight = new THREE.DirectionalLight(0x2f6a80, 0.12);
 rimLight.position.set(-4, 3, -3);
 scene.add(rimLight);
-const screenGlow = new THREE.PointLight(0x4bffa0, 2.2, 6, 2);
-screenGlow.position.set(0, 1.72, 1.6);
+const screenGlow = new THREE.PointLight(0x4bffa0, 3.4, 7, 2);
+screenGlow.position.set(0, 1.72, 1.9);
+screenGlow.castShadow = true;
+screenGlow.shadow.mapSize.set(1024,1024);
+screenGlow.shadow.bias = -0.002;
 scene.add(screenGlow);
 
 // suelo
-const floorMat = new THREE.MeshStandardMaterial({ color:0x111318, roughness:0.9, metalness:0.1 });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x050506, roughness:0.95, metalness:0.05 });
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40,40), floorMat);
 floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
 scene.add(floor);
 
 // ---------------------------------------------------------------
@@ -231,18 +247,20 @@ function drawScreen(t){
 const rig = new THREE.Group();
 scene.add(rig);
 
-const shellColor = 0xcfc7ac;
-const shellMat = new THREE.MeshStandardMaterial({ color:shellColor, roughness:0.55, metalness:0.15 });
-const darkPlasticMat = new THREE.MeshStandardMaterial({ color:0x1c1c20, roughness:0.6, metalness:0.2 });
-const metalMat = new THREE.MeshStandardMaterial({ color:0x2b2b30, roughness:0.4, metalness:0.7 });
+const shellColor = 0x3a382f;
+const shellMat = new THREE.MeshStandardMaterial({ color:shellColor, roughness:0.7, metalness:0.1 });
+const darkPlasticMat = new THREE.MeshStandardMaterial({ color:0x0a0a0c, roughness:0.7, metalness:0.1 });
+const metalMat = new THREE.MeshStandardMaterial({ color:0x0e0e10, roughness:0.5, metalness:0.6 });
 
 // base / soporte
 const base = new THREE.Mesh(new THREE.BoxGeometry(1.7,0.16,1.3), metalMat);
 base.position.set(0, 0.08, 0.2);
+base.castShadow = true; base.receiveShadow = true;
 rig.add(base);
 
 const neck = new THREE.Mesh(new THREE.BoxGeometry(0.45,0.5,0.45), metalMat);
 neck.position.set(0, 0.4, 0.2);
+neck.castShadow = true; neck.receiveShadow = true;
 rig.add(neck);
 
 // carcasa principal del monitor
@@ -250,6 +268,7 @@ const shellW=3.3, shellH=2.35, shellD=1.7;
 const shellY = 1.72;
 const shell = new THREE.Mesh(new THREE.BoxGeometry(shellW,shellH,shellD), shellMat);
 shell.position.set(0, shellY, 0.9-shellD/2+shellD/2); // z centrado en 0.9 aprox front
+shell.castShadow = true; shell.receiveShadow = true;
 rig.add(shell);
 
 // recalcular: colocamos la carcasa centrada de modo que su cara frontal quede en z ~ 0.05 (mundo)
@@ -260,6 +279,7 @@ const shellFrontZ = shell.position.z + shellD/2;
 const bezelW=2.85, bezelH=1.65, bezelD=0.12;
 const bezel = new THREE.Mesh(new THREE.BoxGeometry(bezelW,bezelH,bezelD), darkPlasticMat);
 bezel.position.set(0, shellY+0.03, shellFrontZ + bezelD/2 - 0.02);
+bezel.castShadow = true; bezel.receiveShadow = true;
 rig.add(bezel);
 const bezelFrontZ = bezel.position.z + bezelD/2;
 
@@ -291,6 +311,7 @@ const btnColors = [0xe0533f, 0xf4ecd8, 0xf4ecd8, 0xe0533f];
 for(let i=0;i<4;i++){
   const btn = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.05), new THREE.MeshStandardMaterial({color:btnColors[i], roughness:0.5}));
   btn.position.set(-0.5+i*0.34, shellY - bezelH/2 - 0.15, bezelFrontZ+0.02);
+  btn.castShadow = true;
   rig.add(btn);
 }
 
@@ -299,6 +320,7 @@ for(let s=-1; s<=1; s+=2){
   for(let i=0;i<6;i++){
     const vent = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.14,0.5), darkPlasticMat);
     vent.position.set(s*(shellW/2-0.06), shellY+0.6-i*0.2, shell.position.z);
+    vent.castShadow = true;
     rig.add(vent);
   }
 }
@@ -315,22 +337,25 @@ backSegments.forEach(seg=>{
   cursorZ -= seg.d/2;
   const box = new THREE.Mesh(new THREE.BoxGeometry(seg.w,seg.h,seg.d), shellMat);
   box.position.set(0, shellY, cursorZ);
+  box.castShadow = true; box.receiveShadow = true;
   rig.add(box);
   cursorZ -= seg.d/2;
 });
 
 // teclado (placa + teclas hechas de cubos)
-const kbBase = new THREE.Mesh(new THREE.BoxGeometry(2.5,0.12,0.95), new THREE.MeshStandardMaterial({color:0xcfc7ac, roughness:0.6}));
+const kbBase = new THREE.Mesh(new THREE.BoxGeometry(2.5,0.12,0.95), new THREE.MeshStandardMaterial({color:0x2c2a24, roughness:0.7}));
 kbBase.position.set(0, 0.06, 1.85);
+kbBase.castShadow = true; kbBase.receiveShadow = true;
 rig.add(kbBase);
 
-const keyMat = new THREE.MeshStandardMaterial({color:0xe9e2cf, roughness:0.5});
-const keyMatDark = new THREE.MeshStandardMaterial({color:0x2a2a2e, roughness:0.5});
+const keyMat = new THREE.MeshStandardMaterial({color:0x3e3b32, roughness:0.55});
+const keyMatDark = new THREE.MeshStandardMaterial({color:0x141414, roughness:0.55});
 const rows=4, cols=14;
 for(let r=0;r<rows;r++){
   for(let c=0;c<cols;c++){
     const key = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.07,0.15), (Math.random()<0.08)?keyMatDark:keyMat);
     key.position.set(-1.15+c*0.175, 0.14, 1.55+r*0.19);
+    key.castShadow = true; key.receiveShadow = true;
     rig.add(key);
   }
 }
@@ -355,6 +380,20 @@ window.addEventListener('resize', ()=>{
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// pantalla completa con la tecla "F" + ocultar cursor
+window.addEventListener('keydown', e=>{
+  if(e.key.toLowerCase() === 'f'){
+    if(!document.fullscreenElement){
+      document.documentElement.requestFullscreen().catch(()=>{});
+    } else {
+      document.exitFullscreen();
+    }
+  }
+});
+document.addEventListener('fullscreenchange', ()=>{
+  document.body.classList.toggle('is-fullscreen', !!document.fullscreenElement);
 });
 
 // ---------------------------------------------------------------

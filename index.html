@@ -64,25 +64,6 @@ const greenOverlay = document.getElementById('greenOverlay');
 const overlayImage = document.getElementById('overlayImage');
 const overlayVideo = document.getElementById('overlayVideo');
 
-// precarga todas las imágenes/video desde ya, para que al hacer SPACE
-// aparezcan al instante y no se quede el color sólido esperando la carga
-function preloadOverlayAssets(){
-  if(typeof SCREEN_ASSETS === 'undefined') return;
-  Object.values(SCREEN_ASSETS).forEach(asset=>{
-    if(asset.type === 'video'){
-      const v = document.createElement('video');
-      v.preload = 'auto';
-      v.muted = true;
-      v.src = asset.src;
-      v.load();
-    } else {
-      const img = new Image();
-      img.src = asset.src;
-    }
-  });
-}
-preloadOverlayAssets();
-
 // muestra la imagen o el video correspondiente a la clave dada (ver assets.js)
 function setOverlayMedia(key){
   const asset = (typeof SCREEN_ASSETS !== 'undefined') ? SCREEN_ASSETS[key] : null;

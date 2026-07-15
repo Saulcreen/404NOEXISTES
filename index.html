@@ -11,7 +11,7 @@
   body.is-fullscreen, body.is-fullscreen canvas#scene { cursor:none; }
   #greenOverlay {
     position:fixed; inset:0; background:#17e06a; opacity:0;
-    transition: opacity 1.1s ease;
+    transition: opacity 0.55s ease;
     pointer-events:none; z-index:50;
   }
   #greenOverlay.active { opacity:1; }
@@ -149,11 +149,13 @@ let cursorBlink = true;
 let lastBlink = 0;
 let glitchBurst = 0;
 
-// ---- estado del efecto "space": 0 normal | 1 pantalla azul (zoom+glitch) | 2 pantalla verde total ----
+// ---- estado del efecto "space": 0 normal | 1 azul (interno, con mensaje) | 2..5 overlays de color ----
+const colorSequence = ['#17e06a', '#8b2fe0', '#e0362f', '#e6c72f']; // verde, morada, roja, amarilla
 let spaceState = 0;
-let bsodMode = false;   // true solo en el estado 1 (azul)
+let bsodMode = false;   // true en cualquier estado activo (1..5): zoom + glitch fuerte
 let glitchIntensity = 1;   // multiplicador de intensidad de glitch (suaviza hacia el objetivo)
-let blueAlpha = 0;         // opacidad de la pantalla azul (suaviza hacia el objetivo)
+let blueAlpha = 0;         // opacidad de la pantalla azul interna (solo estado 1)
+let overlaySwapTimer = null;
 
 function drawScreen(t){
   // fondo degradado verde
@@ -445,9 +447,19 @@ window.addEventListener('keydown', e=>{
   }
   if(e.code === 'Space'){
     e.preventDefault();
-    spaceState = (spaceState + 1) % 3;
-    bsodMode = (spaceState === 1);
-    greenOverlay.classList.toggle('active', spaceState === 2);
+    spaceState = (spaceState + 1) % (colorSequence.length + 2); // 0..5
+    bsodMode = (spaceState !== 0);
+
+    // apaga el overlay actual para que se vea el glitch de la pantalla 3D un instante
+    greenOverlay.classList.remove('active');
+    clearTimeout(overlaySwapTimer);
+
+    if(spaceState >= 2){
+      overlaySwapTimer = setTimeout(()=>{
+        greenOverlay.style.background = colorSequence[spaceState-2];
+        greenOverlay.classList.add('active');
+      }, 260);
+    }
   }
 });
 document.addEventListener('fullscreenchange', ()=>{
@@ -460,10 +472,10 @@ document.addEventListener('fullscreenchange', ()=>{
 function animate(t){
   requestAnimationFrame(animate);
 
-  // objetivos segun el modo bsod (activado con SPACE)
+  // objetivos segun el estado activado con SPACE
   const targetRadius = bsodMode ? 1.85 : 4.3;
   const targetGlitch  = bsodMode ? 2.6  : 1.0;
-  const targetBlue    = bsodMode ? 1.0  : 0.0;
+  const targetBlue    = (spaceState === 1) ? 1.0 : 0.0; // solo el primer estado (azul) usa el wash+mensaje interno
 
   radius          += (targetRadius - radius) * 0.045;
   glitchIntensity  += (targetGlitch - glitchIntensity) * 0.06;
